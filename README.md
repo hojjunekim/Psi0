@@ -34,9 +34,9 @@ Required GitHub setting:
 
 - `Settings > Pages > Source = GitHub Actions`
 
-To publish under `https://psi-lab.ai/Psi0`, host this code in the
+To publish under `https://psi-lab.ai/psi0`, host this code in the
 `physical-superintelligence-lab/Psi0` repository and keep the Astro `base` set to
-`/Psi0`.
+`/psi0`.
 
 ## Project layout
 
@@ -110,4 +110,4 @@ See [docs/project-page/adoption.md](/home/zhenyu/src/psi0.github.io/docs/project
 
 ## TODO
 
-- [ ] verify deployed path is /Psi0
+- [ ] verify deployed path is /psi0
