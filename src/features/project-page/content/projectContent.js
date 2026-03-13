@@ -169,8 +169,9 @@ export const projectPageContent = {
     teaserVideoAlt: "Ψ₀ teaser video",
     actions: [
       { label: "Watch Demos", href: "#demos" },
-      { label: "Paper", href: "https://arxiv.org/abs/0000.00000" },
-      { label: "Model", href: "https://huggingface.co/models/usc-gvl/psi0" },
+      { label: "Paper", href: "https://arxiv.org/abs/2603.12263" },
+      { label: "Model", href: "https://huggingface.co/songlinwei/psi-model" },
+      { label: "Data", href: "https://huggingface.co/datasets/songlinwei/psi-data" },
       {
         label: "Code",
         href: "https://github.com/physical-superintelligence-lab/Psi0",
