@@ -358,7 +358,7 @@ export const projectPageContent = {
       kicker: "MODEL ARCHITECTURE",
       title: "Three-System Foundation Model for Whole-Body Control",
       body: "Ψ₀ is a foundation model that adopts a triple-system architecture, following prior work. The high-level policy consists of two end-to-end-trained components: a vision-language backbone (system-2) and a multi-modal diffusion transformer (MM-DiT) action expert (system-1). We use the state-of-the-art vision-language foundation model Qwen3-VL-2B-Instruct as system-2. The action expert is implemented as a flow-based MM-DiT inspired by Stable Diffusion 3, containing approximately 500M parameters. Conditioned on hidden features from the VLM backbone, the action expert predicts future whole-body action chunks. The 8-DoF lower-body actions are passed to system-0, a RL-based tracking policy. We adopt the off-the-shelf controller AMO, which maps these inputs to lower-body joint angles for whole-body control.",
-      src: withBase("/figures/architecture.svg"),
+      src: withBase("/figures/architecture.png"),
       alt: "Ψ₀ architecture diagram",
       caption: "",
     },
