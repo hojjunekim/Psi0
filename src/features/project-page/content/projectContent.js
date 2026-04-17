@@ -18,6 +18,7 @@ const withBase = (path) => {
  * @typedef {{
  *   label: string;
  *   href: string;
+ *   external?: boolean;
  * }} Link
  *
  * @typedef {{
@@ -76,6 +77,14 @@ const withBase = (path) => {
  * }} ExperimentsCopy
  *
  * @typedef {{
+ *   label: string;
+ *   href: string;
+ *   repoOwner: string;
+ *   repoName: string;
+ *   shortLabel: string;
+ * }} RepoStat
+ *
+ * @typedef {{
  *   eyebrow: EyebrowLink;
  *   title: string;
  *   authors: string[];
@@ -84,6 +93,7 @@ const withBase = (path) => {
  *   teaserVideoSrc: string;
  *   teaserVideoAlt: string;
  *   actions: Link[];
+ *   repoStats: RepoStat[];
  * }} HeroContent
  *
  * @typedef {{
@@ -169,15 +179,46 @@ export const projectPageContent = {
     teaserVideoAlt: "Ψ₀ teaser video",
     actions: [
       { label: "Watch Demos", href: "#demos" },
-      { label: "Paper", href: "https://arxiv.org/abs/2603.12263" },
-      { label: "Model", href: "https://huggingface.co/usc-psi-lab/psi-model" },
+      {
+        label: "Paper",
+        href: "https://arxiv.org/abs/2603.12263",
+        external: true,
+      },
+      {
+        label: "Model",
+        href: "https://huggingface.co/usc-psi-lab/psi-model",
+        external: true,
+      },
       {
         label: "Data",
         href: "https://huggingface.co/datasets/usc-psi-lab/psi-data",
+        external: true,
       },
       {
         label: "Code",
         href: "https://github.com/physical-superintelligence-lab/Psi0",
+        external: true,
+      },
+      {
+        label: "SIMPLE",
+        href: "https://github.com/physical-superintelligence-lab/SIMPLE",
+        external: true,
+      },
+    ],
+    repoStats: [
+      {
+        label: "Ψ₀ GitHub Stars",
+        href: "https://github.com/physical-superintelligence-lab/Psi0/stargazers",
+        repoOwner: "physical-superintelligence-lab",
+        repoName: "Psi0",
+        shortLabel: "Ψ₀",
+      },
+      {
+        label: "SIMPLE GitHub Stars",
+        href: "https://github.com/physical-superintelligence-lab/SIMPLE/stargazers",
+        repoOwner: "physical-superintelligence-lab",
+        repoName: "SIMPLE",
+        shortLabel: "SIMPLE",
       },
     ],
   },

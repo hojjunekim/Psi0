@@ -27,9 +27,18 @@ test("hero content is populated and action links are present", () => {
   assert.ok(hero.authors.length >= 3);
   assert.ok(hero.affiliations.length >= 1);
   assert.ok(hero.actions.length >= 2);
+  assert.equal(hero.actions.some((action) => action.label === "SIMPLE"), true);
+  assert.equal(hero.repoStats.length, 2);
   for (const action of hero.actions) {
     assert.ok(action.label.length > 0);
     assert.ok(action.href.length > 0);
+  }
+  for (const repo of hero.repoStats) {
+    assert.ok(repo.label.length > 0);
+    assert.ok(repo.href.length > 0);
+    assert.ok(repo.repoOwner.length > 0);
+    assert.ok(repo.repoName.length > 0);
+    assert.ok(repo.shortLabel.length > 0);
   }
 });
 
