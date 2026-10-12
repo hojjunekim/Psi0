@@ -1,5 +1,5 @@
 from dotenv import load_dotenv
-assert load_dotenv(), "Failed to load .env file. Make sure it exists and is properly formatted."
+load_dotenv()  # optional .env (see .env.sample); exported variables work too
 
 import dataclasses
 import enum
@@ -99,6 +99,15 @@ def create_policy(args: Args) -> _policy.Policy:
             return create_default_policy(args.env, default_prompt=args.default_prompt)
 
 
+def get_train_config(args: Args) -> _config.TrainConfig:
+    """Training config of the policy being served."""
+    match args.policy:
+        case Checkpoint():
+            return _config.get_config(args.policy.config)
+        case Default():
+            return _config.get_config(DEFAULT_CHECKPOINT[args.env].config)
+
+
 def main(args: Args) -> None:
     policy = create_policy(args)
     policy_metadata = policy.metadata
@@ -111,11 +120,15 @@ def main(args: Args) -> None:
     local_ip = socket.gethostbyname(hostname)
     logging.info("Creating server (host: %s, ip: %s)", hostname, local_ip)
 
+    # Only the 32-D whole-body models carry torso RPY + height as extra state
+    # dims; the 18-D LEGS EEF models take the client's state as is.
+    action_dim = get_train_config(args).model.action_dim
     server = websocket_policy_server.WebsocketPolicyServer(
         policy=policy,
         host="0.0.0.0",
         port=args.port,
         metadata=policy_metadata,
+        append_torso_state=action_dim == 32,
     )
     server.serve_forever()
 

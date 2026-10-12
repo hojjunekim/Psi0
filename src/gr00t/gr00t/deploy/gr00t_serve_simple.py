@@ -15,6 +15,33 @@ from gr00t.policy.gr00t_policy import Gr00tPolicy, Gr00tSimPolicyWrapper
 
 from psi.deploy.helpers import RequestMessage, ResponseMessage
 
+# LEGS 18-D EEF schema (embodiment g1_eef_uni): state and action share this
+# layout, i.e. observation.state_psi0_18 / action.psi0_18.
+EEF18_LAYOUT = {
+    "left_eef_xyz": (0, 3),
+    "left_eef_rpy": (3, 6),
+    "left_grip": (6, 7),
+    "right_eef_xyz": (7, 10),
+    "right_eef_rpy": (10, 13),
+    "right_grip": (13, 14),
+    "base_vel": (14, 17),
+    "height": (17, 18),
+}
+
+# 32-D whole-body action order returned to psi-style clients.
+PSI32_ACTION_KEYS = [
+    "left_hand",
+    "right_hand",
+    "left_arm",
+    "right_arm",
+    "rpy",
+    "height",
+    "torso_vx",
+    "torso_vy",
+    "torso_vyaw",
+    "target_yaw",
+]
+
 
 @dataclass
 class ServerConfig:
@@ -130,40 +157,25 @@ class Server:
         }
 
     @staticmethod
+    def _split_state_eef18(states: np.ndarray) -> dict[str, np.ndarray]:
+        states = Server._ensure_btd(np.asarray(states, dtype=np.float32))
+        if states.shape[-1] != 18:
+            raise ValueError(f"Expected 18-D EEF 'states', got {states.shape[-1]}")
+        return {key: states[..., a:b] for key, (a, b) in EEF18_LAYOUT.items()}
+
+    @staticmethod
     def _action_to_psi_format(action: dict[str, Any]) -> np.ndarray:
         def _pick(key: str) -> np.ndarray:
-            raw = action.get(key) or action.get(f"action.{key}")
-            if raw is None:
-                raise KeyError(f"Missing action key '{key}'")
-            return Server._ensure_btd(np.asarray(raw, dtype=np.float32))
+            for name in (key, f"action.{key}"):
+                if action.get(name) is not None:
+                    return Server._ensure_btd(np.asarray(action[name], dtype=np.float32))
+            raise KeyError(f"Missing action key '{key}'")
 
-        left_hand = _pick("left_hand")
-        right_hand = _pick("right_hand")
-        left_arm = _pick("left_arm")
-        right_arm = _pick("right_arm")
-        rpy = _pick("rpy")
-        height = _pick("height")
-        torso_vx = _pick("torso_vx")
-        torso_vy = _pick("torso_vy")
-        torso_vyaw = _pick("torso_vyaw")
-        target_yaw = _pick("target_yaw")
-
-        psi_action = np.concatenate(
-            [
-                left_hand,
-                right_hand,
-                left_arm,
-                right_arm,
-                rpy,
-                height,
-                torso_vx,
-                torso_vy,
-                torso_vyaw,
-                target_yaw,
-            ],
-            axis=-1,
-        )
-        return psi_action
+        if all(action.get(k) is not None or action.get(f"action.{k}") is not None for k in EEF18_LAYOUT):
+            keys = list(EEF18_LAYOUT)  # (B, T, 18)
+        else:
+            keys = PSI32_ACTION_KEYS  # (B, T, 32)
+        return np.concatenate([_pick(k) for k in keys], axis=-1)
 
     def _build_observation(self, request: RequestMessage) -> dict[str, Any]:
         image_dict = request.image
@@ -190,6 +202,8 @@ class Server:
                 state_dict["proprio_joint_positions"],
                 state_dict["amo_policy_command"],
             )
+        elif "states" in state_dict and set(self.modality_configs["state"].modality_keys) == set(EEF18_LAYOUT):
+            state_parts = self._split_state_eef18(state_dict["states"])
         elif "states" in state_dict:
             # SIMPLE psi0 baseline sends 32-dim states:
             # [left_hand_thumb(3), left_hand_middle(2), left_hand_index(2),
@@ -220,7 +234,7 @@ class Server:
         else:
             raise KeyError(
                 "Missing psi-style state ('proprio_joint_positions' + 'amo_policy_command') "
-                "or SIMPLE 'states' in request.state"
+                "or SIMPLE 'states' (18-D EEF or 32-D) in request.state"
             )
 
         for state_key in self.modality_configs["state"].modality_keys:

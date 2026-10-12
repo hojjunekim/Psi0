@@ -33,9 +33,10 @@ def _load_frame(video_path: pathlib.Path, frame_index: int) -> np.ndarray:
 
 @dataclasses.dataclass
 class Args:
+    dataset_path: str
+    """LeRobot dataset root (SIMPLE layout: proprio_joint_positions + amo_policy_command)."""
     host: str = "127.0.0.1"
-    port: int = 5555
-    dataset_path: str = "/hfm/data/simple/G1WholebodyBendPick-v0-psi0"
+    port: int = 5556
     episode_index: int = 0
     target_index: int = 0
     video_key: str = "observation.rgb_head_stereo_left"

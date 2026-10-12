@@ -46,6 +46,8 @@ EMBODIMENT_TAG_TO_PROJECTOR_INDEX = {
     "h1_ee_a16": 11,
     "g1_upper_a16": 10,
     "g1_loco_downstream": 10,
+    "g1_loco_uni": 10,
+    "g1_eef_uni": 10,
 }
 
 

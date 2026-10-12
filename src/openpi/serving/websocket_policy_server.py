@@ -25,11 +25,16 @@ class WebsocketPolicyServer:
         host: str = "0.0.0.0",
         port: int | None = None,
         metadata: dict | None = None,
+        append_torso_state: bool = False,
     ) -> None:
         self._policy = policy
         self._host = host
         self._port = port
         self._metadata = metadata or {}
+        # 32-D whole-body models take the last chunk's torso RPY + height as 4
+        # extra state dims (actions[:, 28:32]). Other models (e.g. the 18-D
+        # LEGS EEF model) get the client's state unchanged.
+        self._append_torso_state = append_torso_state
         logging.getLogger("websockets.server").setLevel(logging.INFO)
 
         self.torso_rpyh = np.array([0, 0, 0, INIT_BASE_HEIGHT], dtype=np.float32)
@@ -62,13 +67,14 @@ class WebsocketPolicyServer:
                 obs = msgpack_numpy.unpackb(await websocket.recv())
 
                 infer_time = time.monotonic()
-                print(f"Received instruction: {obs['prompt']}")
-                if infer_time - self.serve_time > 30 or obs.get("reset", False): # if idle more than 30s or reset flag is set, reset torso_rpyh
-                    self.torso_rpyh = np.array([0, 0, 0, INIT_BASE_HEIGHT], dtype=np.float32)
-                    print("Reset torso_rpyh to default.") 
-                print(f"Torso rpyh: {self.torso_rpyh}")
-
-                obs["states"] = np.concatenate([obs["states"], self.torso_rpyh], axis=0)
+                reset = bool(obs.pop("reset", False))
+                print(f"Received instruction: {obs.get('prompt')}")
+                if self._append_torso_state:
+                    if infer_time - self.serve_time > 30 or reset: # if idle more than 30s or reset flag is set, reset torso_rpyh
+                        self.torso_rpyh = np.array([0, 0, 0, INIT_BASE_HEIGHT], dtype=np.float32)
+                        print("Reset torso_rpyh to default.")
+                    print(f"Torso rpyh: {self.torso_rpyh}")
+                    obs["states"] = np.concatenate([obs["states"], self.torso_rpyh], axis=0)
 
                 action = self._policy.infer(obs)
                 # print(f"Sending action: {action}")
@@ -81,7 +87,8 @@ class WebsocketPolicyServer:
                     # We can only record the last total time since we also want to include the send time.
                     action["server_timing"]["prev_total_ms"] = prev_total_time * 1000
                 
-                self.torso_rpyh = action["actions"][-1, 28:32]
+                if self._append_torso_state:
+                    self.torso_rpyh = action["actions"][-1, 28:32]
 
                 await websocket.send(packer.pack(action))
                 prev_total_time = time.monotonic() - start_time

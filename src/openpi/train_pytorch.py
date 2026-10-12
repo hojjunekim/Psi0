@@ -496,11 +496,29 @@ def train_loop(config: _config.TrainConfig):
             # to_pad = torch.zeros_like(w[-pad_dim:, :])
             state_dict["action_out_proj.weight"] = torch.cat([w, to_pad], dim=0)
 
+        elif pad_dim < 0:
+            # eg., torch.Size([1024, 32]) -> torch.Size([1024, 18])
+            # Symmetric to the pad_dim > 0 branch: slice pretrained action heads
+            # down to config.model.action_dim. Without this, the shape-mismatch
+            # sweep below would delete these tensors and load_state_dict would
+            # leave the action heads random-init, which biases short fine-tunes.
+            keep = config.model.action_dim
+            state_dict["action_in_proj.weight"]  = state_dict["action_in_proj.weight"][:, :keep]
+            state_dict["action_out_proj.weight"] = state_dict["action_out_proj.weight"][:keep, :]
+            state_dict["action_out_proj.bias"]   = state_dict["action_out_proj.bias"][:keep]
+            # action_in_proj.bias has shape [width], independent of action_dim — loads as-is.
+
         # https://github.com/Physical-Intelligence/openpi/issues/669
         state_dict["paligemma_with_expert.paligemma.model.language_model.embed_tokens.weight"] = \
             state_dict["paligemma_with_expert.paligemma.lm_head.weight"]
 
         _model = model.module if isinstance(model, torch.nn.parallel.DistributedDataParallel) else model
+        # Remove keys with shape mismatch (e.g., action_dim differs from checkpoint)
+        model_state = _model.state_dict()
+        for k in list(state_dict.keys()):
+            if k in model_state and state_dict[k].shape != model_state[k].shape:
+                logging.info(f"Skipping {k}: shape mismatch {state_dict[k].shape} vs {model_state[k].shape}")
+                del state_dict[k]
         missing_keys, unexpected_keys = _model.load_state_dict(state_dict, strict=False)
         # missing_keys, unexpected_keys = safetensors.torch.load_model(
         #     (model.module if isinstance(model, torch.nn.parallel.DistributedDataParallel) else model), model_path, strict=False

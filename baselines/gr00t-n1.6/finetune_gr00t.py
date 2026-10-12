@@ -13,7 +13,21 @@ import yaml
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
 PRESET_ROOT = SCRIPT_DIR / "presets" / "train"
-GR00T_PYTHON = REPO_ROOT / "src/gr00t/.venv/bin/python"
+# GR00T-N1.6 needs the baseline-pinned torch/transformers from src/gr00t/.venv
+# (see baselines/README.md — each baseline has its own isolated env). Allow an
+# explicit override via GR00T_PYTHON env var; otherwise require the default.
+_DEFAULT_GR00T_PYTHON = REPO_ROOT / "src/gr00t/.venv/bin/python"
+GR00T_PYTHON = Path(os.environ.get("GR00T_PYTHON") or _DEFAULT_GR00T_PYTHON)
+
+
+def _check_gr00t_python() -> None:
+    if not GR00T_PYTHON.exists():
+        raise SystemExit(
+            f"[finetune_gr00t] Python interpreter not found: {GR00T_PYTHON}\n"
+            f"GR00T-N1.6 requires its own venv with baseline-pinned torch/transformers.\n"
+            f"Create it with:  cd {REPO_ROOT}/src/gr00t && uv sync\n"
+            f"(or override with GR00T_PYTHON=/path/to/python)"
+        )
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:
@@ -80,6 +94,16 @@ def _append_args(cmd: list[str], args_map: dict[str, Any]) -> None:
             cmd.extend(str(item) for item in value)
             continue
         cmd.extend([flag, str(value)])
+
+
+def _parse_overrides(items: list[str]) -> dict[str, Any]:
+    overrides: dict[str, Any] = {}
+    for item in items:
+        key, sep, raw = item.partition("=")
+        if not sep or not key:
+            raise ValueError(f"Expected KEY=VALUE, got: {item}")
+        overrides[key.replace("-", "_")] = yaml.safe_load(raw)
+    return overrides
 
 
 def _build_color_jitter_args(config: dict[str, Any]) -> list[str]:
@@ -155,6 +179,13 @@ def main() -> int:
     parser.add_argument("--cuda-visible-devices", help="Override CUDA_VISIBLE_DEVICES.")
     parser.add_argument("--master-port", type=int, help="Override torchrun master port.")
     parser.add_argument("--num-gpus", type=int, help="Override launcher --num-gpus.")
+    parser.add_argument(
+        "--set",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="Override a launcher argument (YAML-typed value), e.g. --set max_steps=20000 --set use_wandb=false.",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Print command and exit.")
     args = parser.parse_args()
 
@@ -196,10 +227,14 @@ def main() -> int:
         launcher_args["output_dir"] = args.output_dir
     if args.base_model_path:
         launcher_args["base_model_path"] = args.base_model_path
+    # The global batch is split over num_gpus, so it has to match the number of launched processes.
     if args.num_gpus is not None:
         launcher_args["num_gpus"] = args.num_gpus
-    elif launcher_args.get("num_gpus") is None:
+    else:
+        if launcher_args.get("num_gpus") not in (None, nproc_per_node):
+            print(f"num_gpus: preset has {launcher_args['num_gpus']}, using the {nproc_per_node} launched processes")
         launcher_args["num_gpus"] = nproc_per_node
+    launcher_args.update(_parse_overrides(args.set))
 
     for key, value in preset.get("env", {}).items():
         env[str(key)] = str(value)
@@ -220,6 +255,7 @@ def main() -> int:
     if args.dry_run:
         return 0
 
+    _check_gr00t_python()
     subprocess.run(cmd, cwd=REPO_ROOT, env=env, check=True)
     return 0
 

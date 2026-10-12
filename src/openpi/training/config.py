@@ -33,6 +33,11 @@ ModelType: TypeAlias = _model.ModelType
 # Work around a tyro issue with using nnx.filterlib.Filter directly.
 Filter: TypeAlias = nnx.filterlib.Filter
 
+# Roots of the dataset and checkpoint paths below. Each can be overridden through the environment.
+PSI_HOME = os.environ.get("PSI_HOME", str(pathlib.Path(__file__).resolve().parents[3]))
+HF_LEROBOT_HOME = os.environ.get("HF_LEROBOT_HOME", str(pathlib.Path("~/.cache/huggingface/lerobot").expanduser()))
+DATA_HOME = os.environ.get("DATA_HOME", f"{PSI_HOME}/data")
+
 
 @dataclasses.dataclass(frozen=True)
 class AssetsConfig:
@@ -457,6 +462,49 @@ class LeRobotHFMDataConfig(DataConfigFactory):
             repack_transforms=repack_transform,
             data_transforms=data_transforms,
             model_transforms=model_transforms,
+        )
+
+@dataclasses.dataclass(frozen=True)
+class LeRobotUniversalDataConfig(DataConfigFactory):
+    """HFM data config for the universal LeRobot schema (sim wigs + GR00T-WBC teleop).
+
+    Reuses HfmInputs/HfmOutputs — only the source column names differ from
+    LeRobotHFMDataConfig:
+        observation.images.ego_view     -> observation/image
+        observation.state_psi0_18  (18) -> states
+        action.psi0_18             (18) -> actions
+        task                            -> prompt
+
+    18-D state matches the psi0 training scripts (which set the state key
+    to observation.state_psi0_18), so pi05 and psi0 train on the
+    same observation space. Extra 3 dims over the 15-D variant are
+    [vx, vy, vyaw] — base velocities the head needs for locomotion.
+    """
+
+    @override
+    def create(self, assets_dirs: pathlib.Path, model_config: _model.BaseModelConfig) -> DataConfig:
+        repack_transform = _transforms.Group(
+            inputs=[
+                _transforms.RepackTransform({
+                    "observation/image": "observation.images.ego_view",
+                    "states": "observation.state_psi0_18",
+                    "actions": "action.psi0_18",
+                    "prompt": "task",
+                })
+            ]
+        )
+        data_transforms = _transforms.Group(
+            inputs=[psi_policy.HfmInputs(model_type=model_config.model_type)],
+            outputs=[psi_policy.HfmOutputs()],
+        )
+        model_transforms = ModelTransformFactory()(model_config)
+
+        return dataclasses.replace(
+            self.create_base_config(assets_dirs, model_config),
+            repack_transforms=repack_transform,
+            data_transforms=data_transforms,
+            model_transforms=model_transforms,
+            action_sequence_keys=("action.psi0_18",),
         )
 
 @dataclasses.dataclass(frozen=True)
@@ -907,7 +955,7 @@ _CONFIGS = [
         data=RLDSDroidDataConfig(
             repo_id="droid",
             # Set this to the path to your DROID RLDS dataset (the parent directory of the `droid` directory).
-            rlds_data_dir="/mnt/pi-data/kevin",
+            rlds_data_dir="<path_to_droid_rlds_dataset>",
             action_space=droid_rlds_dataset.DroidActionSpace.JOINT_POSITION,
             assets=AssetsConfig(
                 assets_dir="gs://openpi-assets/checkpoints/pi05_base/assets/",
@@ -964,7 +1012,7 @@ _CONFIGS = [
             max_token_len=250,
         ),
         data=LeRobotHFMDataConfig( # FIXME
-            repo_id= f"{os.environ['DATA_HOME']}/Hold_lunch_bag_with_both_hands_and_squat_to_put_on_the_coffee_table",
+            repo_id= f"{DATA_HOME}/Hold_lunch_bag_with_both_hands_and_squat_to_put_on_the_coffee_table",
             base_config=DataConfig(prompt_from_task=True),
         ),
         weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_droid/params"),
@@ -977,7 +1025,7 @@ _CONFIGS = [
             decay_steps=40_000,
             decay_lr=1e-8,
         ),
-        pytorch_weight_path=f"{os.environ['PSI_HOME']}/cache/checkpoints/openpi/pi05_droid",
+        pytorch_weight_path=f"{PSI_HOME}/cache/checkpoints/openpi/pi05_droid",
         policy_metadata={"dataset": "Hold_lunch_bag_with_both_hands_and_squat_to_put_on_the_coffee_table"},
     ),
     TrainConfig(
@@ -991,7 +1039,7 @@ _CONFIGS = [
             max_token_len=250,
         ),
         data=LeRobotHFMDataConfig(
-            repo_id= f"{os.environ['DATA_HOME']}/Pick_bottle_and_turn_and_pour_into_cup",
+            repo_id= f"{DATA_HOME}/Pick_bottle_and_turn_and_pour_into_cup",
             base_config=DataConfig(prompt_from_task=True),
         ),
         weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_droid/params"),
@@ -1004,7 +1052,7 @@ _CONFIGS = [
             decay_steps=40_000,
             decay_lr=1e-8,
         ),
-        pytorch_weight_path=f"{os.environ['PSI_HOME']}/cache/checkpoints/openpi/pi05_droid",
+        pytorch_weight_path=f"{PSI_HOME}/cache/checkpoints/openpi/pi05_droid",
         policy_metadata={"dataset": "Pick_bottle_and_turn_and_pour_into_cup"},
     ),
     TrainConfig(
@@ -1018,7 +1066,7 @@ _CONFIGS = [
             max_token_len=250,
         ),
         data=LeRobotHFMDataConfig( # FIXME
-            repo_id= f"{os.environ['DATA_HOME']}/Pick_toys_into_box_and_lift_and_turn_and_put_on_the_chair_new_target_yaw",
+            repo_id= f"{DATA_HOME}/Pick_toys_into_box_and_lift_and_turn_and_put_on_the_chair_new_target_yaw",
             base_config=DataConfig(prompt_from_task=True),
         ),
         weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_droid/params"),
@@ -1035,7 +1083,7 @@ _CONFIGS = [
             decay_steps=40_000,
             decay_lr=1e-8,
         ),
-        pytorch_weight_path=f"{os.environ['PSI_HOME']}/cache/checkpoints/openpi/pi05_droid",
+        pytorch_weight_path=f"{PSI_HOME}/cache/checkpoints/openpi/pi05_droid",
         policy_metadata={"dataset": "Pick_toys_into_box_and_lift_and_turn_and_put_on_the_chair_new_target_yaw"},
     ),
     TrainConfig(
@@ -1049,7 +1097,7 @@ _CONFIGS = [
             max_token_len=250,
         ),
         data=LeRobotHFMDataConfig( # FIXME
-            repo_id= f"{os.environ['DATA_HOME']}/Pull_the_tray_out_of_chips_can_and_throw_the_can_into_trash_bin",
+            repo_id= f"{DATA_HOME}/Pull_the_tray_out_of_chips_can_and_throw_the_can_into_trash_bin",
             base_config=DataConfig(prompt_from_task=True),
         ),
         weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_droid/params"),
@@ -1063,7 +1111,7 @@ _CONFIGS = [
             decay_steps=40_000,
             decay_lr=1e-8,
         ),
-        pytorch_weight_path=f"{os.environ['PSI_HOME']}/cache/checkpoints/openpi/pi05_droid",
+        pytorch_weight_path=f"{PSI_HOME}/cache/checkpoints/openpi/pi05_droid",
         policy_metadata={"dataset": "Pull_the_tray_out_of_chips_can_and_throw_the_can_into_trash_bin"},
     ),
     TrainConfig(
@@ -1077,7 +1125,7 @@ _CONFIGS = [
             max_token_len=250,
         ),
         data=LeRobotHFMDataConfig( # FIXME
-            repo_id= f"{os.environ['DATA_HOME']}/Push_cart_grasp_and_place_grapes_on_plate",
+            repo_id= f"{DATA_HOME}/Push_cart_grasp_and_place_grapes_on_plate",
             base_config=DataConfig(prompt_from_task=True),
         ),
         weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_droid/params"),
@@ -1090,7 +1138,7 @@ _CONFIGS = [
             decay_steps=40_000,
             decay_lr=1e-8,
         ),
-        pytorch_weight_path=f"{os.environ['PSI_HOME']}/cache/checkpoints/openpi/pi05_droid",
+        pytorch_weight_path=f"{PSI_HOME}/cache/checkpoints/openpi/pi05_droid",
         policy_metadata={"dataset": "Push_cart_grasp_and_place_grapes_on_plate"},
     ),
     TrainConfig(
@@ -1104,7 +1152,7 @@ _CONFIGS = [
             max_token_len=250,
         ),
         data=LeRobotHFMDataConfig( # FIXME
-            repo_id= f"{os.environ['DATA_HOME']}/Put_dumpling_into_blanket_and_turn_around_and_pass_to_human",
+            repo_id= f"{DATA_HOME}/Put_dumpling_into_blanket_and_turn_around_and_pass_to_human",
             base_config=DataConfig(prompt_from_task=True),
         ),
         weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_droid/params"),
@@ -1117,7 +1165,7 @@ _CONFIGS = [
             decay_steps=40_000,
             decay_lr=1e-8,
         ),
-        pytorch_weight_path=f"{os.environ['PSI_HOME']}/cache/checkpoints/openpi/pi05_droid",
+        pytorch_weight_path=f"{PSI_HOME}/cache/checkpoints/openpi/pi05_droid",
         policy_metadata={"dataset": "Put_dumpling_into_blanket_and_turn_around_and_pass_to_human"},
     ),
     TrainConfig(
@@ -1131,7 +1179,7 @@ _CONFIGS = [
             max_token_len=250,
         ),
         data=LeRobotHFMDataConfig( # FIXME
-            repo_id= f"{os.environ['DATA_HOME']}/Remove_the_cap_turn_on_the_faucet_and_fill_the_bottle_with_water",
+            repo_id= f"{DATA_HOME}/Remove_the_cap_turn_on_the_faucet_and_fill_the_bottle_with_water",
             base_config=DataConfig(prompt_from_task=True),
         ),
         weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_droid/params"),
@@ -1144,7 +1192,7 @@ _CONFIGS = [
             decay_steps=40_000,
             decay_lr=1e-8,
         ),
-        pytorch_weight_path=f"{os.environ['PSI_HOME']}/cache/checkpoints/openpi/pi05_droid",
+        pytorch_weight_path=f"{PSI_HOME}/cache/checkpoints/openpi/pi05_droid",
         policy_metadata={"dataset": "Remove_the_cap_turn_on_the_faucet_and_fill_the_bottle_with_water"},
     ),
     TrainConfig(
@@ -1158,7 +1206,7 @@ _CONFIGS = [
             max_token_len=250,
         ),
         data=LeRobotHFMDataConfig( # FIXME
-            repo_id= f"{os.environ['DATA_HOME']}/Rotate_to_pour_ham_into_plate_and_push_the_cart_forward",
+            repo_id= f"{DATA_HOME}/Rotate_to_pour_ham_into_plate_and_push_the_cart_forward",
             base_config=DataConfig(prompt_from_task=True),
         ),
         weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_droid/params"),
@@ -1171,7 +1219,7 @@ _CONFIGS = [
             decay_steps=40_000,
             decay_lr=1e-8,
         ),
-        pytorch_weight_path=f"{os.environ['PSI_HOME']}/cache/checkpoints/openpi/pi05_droid",
+        pytorch_weight_path=f"{PSI_HOME}/cache/checkpoints/openpi/pi05_droid",
         policy_metadata={"dataset": "Rotate_to_pour_ham_into_plate_and_push_the_cart_forward"},
     ),
     TrainConfig(
@@ -1185,7 +1233,7 @@ _CONFIGS = [
             max_token_len=250,
         ),
         data=LeRobotHFMDataConfig( # FIXME
-            repo_id= f"{os.environ['DATA_HOME']}/Spray_the_bowl_and_wipe_it_and_stack_it_up",
+            repo_id= f"{DATA_HOME}/Spray_the_bowl_and_wipe_it_and_stack_it_up",
             base_config=DataConfig(prompt_from_task=True),
         ),
         weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_droid/params"),
@@ -1198,8 +1246,500 @@ _CONFIGS = [
             decay_steps=40_000,
             decay_lr=1e-8,
         ),
-        pytorch_weight_path=f"{os.environ['PSI_HOME']}/cache/checkpoints/openpi/pi05_droid",
+        pytorch_weight_path=f"{PSI_HOME}/cache/checkpoints/openpi/pi05_droid",
         policy_metadata={"dataset": "Spray_the_bowl_and_wipe_it_and_stack_it_up"},
+    ),
+    ### LEGS: g1_sonic 18-EEF (15-state, 18-action) tasks fine-tuned from pi05_droid ###
+    TrainConfig(
+        name="g1_sonic_orange_to_plate_turn_pi05",
+        project_name="psi",
+        num_workers=8,
+        model=pi0_config.Pi0Config(
+            pi05=True,
+            action_dim=18,
+            action_horizon=16,
+            max_token_len=250,
+        ),
+        data=LeRobotHFMDataConfig(
+            repo_id=f"{DATA_HOME}/g1_sonic_orange_to_plate_turn_psi0",
+            base_config=DataConfig(prompt_from_task=True),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_droid/params"),
+        num_train_steps=40_000,
+        batch_size=128,
+        lr_schedule=_optimizer.CosineDecaySchedule(
+            warmup_steps=1_000,
+            peak_lr=1e-4,
+            decay_steps=40_000,
+            decay_lr=1e-8,
+        ),
+        pytorch_weight_path=f"{PSI_HOME}/cache/checkpoints/openpi/pi05_droid",
+        policy_metadata={"dataset": "g1_sonic_orange_to_plate_turn_psi0"},
+        checkpoint_base_dir=".runs/openpi-05",
+    ),
+    ### LEGS: pi05 fine-tunes on universal-schema datasets (suffix _uni: one schema
+    ### shared by psi0, pi05 and GR00T).
+    ### repo_id is HF_LEROBOT_HOME/<repo id>, the layout psi0 reads under its DATA_ROOT,
+    ### so one `hf download <repo id> --repo-type dataset --local-dir $HF_LEROBOT_HOME/<repo id>`
+    ### serves both pi05 (this TrainConfig) and psi0 (the dataset argument of its training script).
+    TrainConfig(
+        name="g1_sonic_orange_to_plate_locomani_uni_pi05",
+        project_name="psi",
+        num_workers=8,
+        model=pi0_config.Pi0Config(
+            pi05=True,
+            action_dim=18,
+            action_horizon=16,
+            max_token_len=250,
+        ),
+        data=LeRobotUniversalDataConfig(
+            repo_id=f"{HF_LEROBOT_HOME}/hojjunekim/g1_sonic_orange_to_plate_locomani_uni",
+            base_config=DataConfig(prompt_from_task=True),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_droid/params"),
+        num_train_steps=40_000,
+        batch_size=128,
+        lr_schedule=_optimizer.CosineDecaySchedule(
+            warmup_steps=1_000,
+            peak_lr=1e-4,
+            decay_steps=40_000,
+            decay_lr=1e-8,
+        ),
+        pytorch_weight_path=f"{PSI_HOME}/cache/checkpoints/openpi/pi05_droid",
+        policy_metadata={"dataset": "g1_sonic_orange_to_plate_locomani_uni"},
+        checkpoint_base_dir=".runs/openpi-05",
+    ),
+    TrainConfig(
+        name="g1_sonic_orange_to_plate_turn_uni_pi05",
+        project_name="psi",
+        num_workers=8,
+        model=pi0_config.Pi0Config(
+            pi05=True,
+            action_dim=18,
+            action_horizon=16,
+            max_token_len=250,
+        ),
+        data=LeRobotUniversalDataConfig(
+            repo_id=f"{HF_LEROBOT_HOME}/hojjunekim/g1_sonic_orange_to_plate_turn_uni",
+            base_config=DataConfig(prompt_from_task=True),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_droid/params"),
+        num_train_steps=40_000,
+        batch_size=128,
+        lr_schedule=_optimizer.CosineDecaySchedule(
+            warmup_steps=1_000,
+            peak_lr=1e-4,
+            decay_steps=40_000,
+            decay_lr=1e-8,
+        ),
+        pytorch_weight_path=f"{PSI_HOME}/cache/checkpoints/openpi/pi05_droid",
+        policy_metadata={"dataset": "g1_sonic_orange_to_plate_turn_uni"},
+        checkpoint_base_dir=".runs/openpi-05",
+    ),
+    TrainConfig(
+        name="teleop_locomani_uni_pi05",
+        project_name="psi",
+        num_workers=8,
+        model=pi0_config.Pi0Config(
+            pi05=True,
+            action_dim=18,
+            action_horizon=16,
+            max_token_len=250,
+        ),
+        data=LeRobotUniversalDataConfig(
+            repo_id=f"{HF_LEROBOT_HOME}/hojjunekim/teleop_locomani_uni",
+            base_config=DataConfig(prompt_from_task=True),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_droid/params"),
+        num_train_steps=40_000,
+        batch_size=128,
+        lr_schedule=_optimizer.CosineDecaySchedule(
+            warmup_steps=1_000,
+            peak_lr=1e-4,
+            decay_steps=40_000,
+            decay_lr=1e-8,
+        ),
+        pytorch_weight_path=f"{PSI_HOME}/cache/checkpoints/openpi/pi05_droid",
+        policy_metadata={"dataset": "teleop_locomani_uni"},
+        checkpoint_base_dir=".runs/openpi-05",
+    ),
+    TrainConfig(
+        name="teleop_turn_uni_pi05",
+        project_name="psi",
+        num_workers=8,
+        model=pi0_config.Pi0Config(
+            pi05=True,
+            action_dim=18,
+            action_horizon=16,
+            max_token_len=250,
+        ),
+        data=LeRobotUniversalDataConfig(
+            repo_id=f"{HF_LEROBOT_HOME}/hojjunekim/teleop_turn_uni",
+            base_config=DataConfig(prompt_from_task=True),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_droid/params"),
+        num_train_steps=40_000,
+        batch_size=128,
+        lr_schedule=_optimizer.CosineDecaySchedule(
+            warmup_steps=1_000,
+            peak_lr=1e-4,
+            decay_steps=40_000,
+            decay_lr=1e-8,
+        ),
+        pytorch_weight_path=f"{PSI_HOME}/cache/checkpoints/openpi/pi05_droid",
+        policy_metadata={"dataset": "teleop_turn_uni"},
+        checkpoint_base_dir=".runs/openpi-05",
+    ),
+    TrainConfig(
+        name="wigs_locomani_pi05",
+        project_name="psi",
+        num_workers=8,
+        model=pi0_config.Pi0Config(
+            pi05=True,
+            action_dim=18,
+            action_horizon=16,
+            max_token_len=250,
+        ),
+        data=LeRobotUniversalDataConfig(
+            repo_id=f"{HF_LEROBOT_HOME}/hojjunekim/wigs_locomani_align_uni",
+            base_config=DataConfig(prompt_from_task=True),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_droid/params"),
+        num_train_steps=40_000,
+        batch_size=128,
+        lr_schedule=_optimizer.CosineDecaySchedule(
+            warmup_steps=1_000,
+            peak_lr=1e-4,
+            decay_steps=40_000,
+            decay_lr=1e-8,
+        ),
+        pytorch_weight_path=f"{PSI_HOME}/cache/checkpoints/openpi/pi05_droid",
+        policy_metadata={"dataset": "wigs_locomani_align_uni"},
+        checkpoint_base_dir=".runs/openpi-05",
+    ),
+    TrainConfig(
+        name="wigs_locomani_adjust_pi05",
+        project_name="psi",
+        num_workers=8,
+        model=pi0_config.Pi0Config(
+            pi05=True,
+            action_dim=18,
+            action_horizon=16,
+            max_token_len=250,
+        ),
+        data=LeRobotUniversalDataConfig(
+            repo_id=f"{HF_LEROBOT_HOME}/hojjunekim/wigs_locomani_adjust_uni",
+            base_config=DataConfig(prompt_from_task=True),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_droid/params"),
+        num_train_steps=40_000,
+        batch_size=128,
+        lr_schedule=_optimizer.CosineDecaySchedule(
+            warmup_steps=1_000,
+            peak_lr=1e-4,
+            decay_steps=40_000,
+            decay_lr=1e-8,
+        ),
+        pytorch_weight_path=f"{PSI_HOME}/cache/checkpoints/openpi/pi05_droid",
+        policy_metadata={"dataset": "wigs_locomani_adjust_uni"},
+        checkpoint_base_dir=".runs/openpi-05",
+    ),
+    TrainConfig(
+        name="wigs_locomani_camfix_pi05",
+        project_name="psi",
+        num_workers=8,
+        model=pi0_config.Pi0Config(
+            pi05=True,
+            action_dim=18,
+            action_horizon=16,
+            max_token_len=250,
+        ),
+        data=LeRobotUniversalDataConfig(
+            repo_id=f"{HF_LEROBOT_HOME}/hojjunekim/wigs_locomani_camfix_uni",
+            base_config=DataConfig(prompt_from_task=True),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_droid/params"),
+        num_train_steps=40_000,
+        batch_size=128,
+        lr_schedule=_optimizer.CosineDecaySchedule(
+            warmup_steps=1_000,
+            peak_lr=1e-4,
+            decay_steps=40_000,
+            decay_lr=1e-8,
+        ),
+        pytorch_weight_path=f"{PSI_HOME}/cache/checkpoints/openpi/pi05_droid",
+        policy_metadata={"dataset": "wigs_locomani_camfix_uni"},
+        checkpoint_base_dir=".runs/openpi-05",
+    ),
+    TrainConfig(
+        name="wigs_locomani_camfix50_pi05",
+        project_name="psi",
+        num_workers=8,
+        model=pi0_config.Pi0Config(
+            pi05=True,
+            action_dim=18,
+            action_horizon=16,
+            max_token_len=250,
+        ),
+        data=LeRobotUniversalDataConfig(
+            repo_id=f"{HF_LEROBOT_HOME}/hojjunekim/wigs_locomani_camfix50_uni",
+            base_config=DataConfig(prompt_from_task=True),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_droid/params"),
+        num_train_steps=40_000,
+        batch_size=128,
+        lr_schedule=_optimizer.CosineDecaySchedule(
+            warmup_steps=1_000,
+            peak_lr=1e-4,
+            decay_steps=40_000,
+            decay_lr=1e-8,
+        ),
+        pytorch_weight_path=f"{PSI_HOME}/cache/checkpoints/openpi/pi05_droid",
+        policy_metadata={"dataset": "wigs_locomani_camfix50_uni"},
+        checkpoint_base_dir=".runs/openpi-05",
+    ),
+    TrainConfig(
+        name="wigs_turn_adjust_pi05",
+        project_name="psi",
+        num_workers=8,
+        model=pi0_config.Pi0Config(
+            pi05=True,
+            action_dim=18,
+            action_horizon=16,
+            max_token_len=250,
+        ),
+        data=LeRobotUniversalDataConfig(
+            repo_id=f"{HF_LEROBOT_HOME}/hojjunekim/wigs_turn_adjust_uni",
+            base_config=DataConfig(prompt_from_task=True),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_droid/params"),
+        num_train_steps=40_000,
+        batch_size=128,
+        lr_schedule=_optimizer.CosineDecaySchedule(
+            warmup_steps=1_000,
+            peak_lr=1e-4,
+            decay_steps=40_000,
+            decay_lr=1e-8,
+        ),
+        pytorch_weight_path=f"{PSI_HOME}/cache/checkpoints/openpi/pi05_droid",
+        policy_metadata={"dataset": "wigs_turn_adjust_uni"},
+        checkpoint_base_dir=".runs/openpi-05",
+    ),
+    TrainConfig(
+        name="wigs_turn_camfix_pi05",
+        project_name="psi",
+        num_workers=8,
+        model=pi0_config.Pi0Config(
+            pi05=True,
+            action_dim=18,
+            action_horizon=16,
+            max_token_len=250,
+        ),
+        data=LeRobotUniversalDataConfig(
+            repo_id=f"{HF_LEROBOT_HOME}/hojjunekim/wigs_turn_camfix_uni",
+            base_config=DataConfig(prompt_from_task=True),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_droid/params"),
+        num_train_steps=40_000,
+        batch_size=128,
+        lr_schedule=_optimizer.CosineDecaySchedule(
+            warmup_steps=1_000,
+            peak_lr=1e-4,
+            decay_steps=40_000,
+            decay_lr=1e-8,
+        ),
+        pytorch_weight_path=f"{PSI_HOME}/cache/checkpoints/openpi/pi05_droid",
+        policy_metadata={"dataset": "wigs_turn_camfix_uni"},
+        checkpoint_base_dir=".runs/openpi-05",
+    ),
+    TrainConfig(
+        name="wigs_turn_camfix50_pi05",
+        project_name="psi",
+        num_workers=8,
+        model=pi0_config.Pi0Config(
+            pi05=True,
+            action_dim=18,
+            action_horizon=16,
+            max_token_len=250,
+        ),
+        data=LeRobotUniversalDataConfig(
+            repo_id=f"{HF_LEROBOT_HOME}/hojjunekim/wigs_turn_camfix50_uni",
+            base_config=DataConfig(prompt_from_task=True),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_droid/params"),
+        num_train_steps=40_000,
+        batch_size=128,
+        lr_schedule=_optimizer.CosineDecaySchedule(
+            warmup_steps=1_000,
+            peak_lr=1e-4,
+            decay_steps=40_000,
+            decay_lr=1e-8,
+        ),
+        pytorch_weight_path=f"{PSI_HOME}/cache/checkpoints/openpi/pi05_droid",
+        policy_metadata={"dataset": "wigs_turn_camfix50_uni"},
+        checkpoint_base_dir=".runs/openpi-05",
+    ),
+    TrainConfig(
+        name="wigs_turn_pure_pi05",
+        project_name="psi",
+        num_workers=8,
+        model=pi0_config.Pi0Config(
+            pi05=True,
+            action_dim=18,
+            action_horizon=16,
+            max_token_len=250,
+        ),
+        data=LeRobotUniversalDataConfig(
+            repo_id=f"{HF_LEROBOT_HOME}/hojjunekim/wigs_turn_pure_uni",
+            base_config=DataConfig(prompt_from_task=True),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_droid/params"),
+        num_train_steps=40_000,
+        batch_size=128,
+        lr_schedule=_optimizer.CosineDecaySchedule(
+            warmup_steps=1_000,
+            peak_lr=1e-4,
+            decay_steps=40_000,
+            decay_lr=1e-8,
+        ),
+        pytorch_weight_path=f"{PSI_HOME}/cache/checkpoints/openpi/pi05_droid",
+        policy_metadata={"dataset": "wigs_turn_pure_uni"},
+        checkpoint_base_dir=".runs/openpi-05",
+    ),
+    TrainConfig(
+        name="wigs_turn_pure50_pi05",
+        project_name="psi",
+        num_workers=8,
+        model=pi0_config.Pi0Config(
+            pi05=True,
+            action_dim=18,
+            action_horizon=16,
+            max_token_len=250,
+        ),
+        data=LeRobotUniversalDataConfig(
+            repo_id=f"{HF_LEROBOT_HOME}/hojjunekim/wigs_turn_pure50_uni",
+            base_config=DataConfig(prompt_from_task=True),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_droid/params"),
+        num_train_steps=40_000,
+        batch_size=128,
+        lr_schedule=_optimizer.CosineDecaySchedule(
+            warmup_steps=1_000,
+            peak_lr=1e-4,
+            decay_steps=40_000,
+            decay_lr=1e-8,
+        ),
+        pytorch_weight_path=f"{PSI_HOME}/cache/checkpoints/openpi/pi05_droid",
+        policy_metadata={"dataset": "wigs_turn_pure50_uni"},
+        checkpoint_base_dir=".runs/openpi-05",
+    ),
+    TrainConfig(
+        name="sam_turn_pure_pi05",
+        project_name="psi",
+        num_workers=8,
+        model=pi0_config.Pi0Config(
+            pi05=True,
+            action_dim=18,
+            action_horizon=16,
+            max_token_len=250,
+        ),
+        data=LeRobotUniversalDataConfig(
+            repo_id=f"{HF_LEROBOT_HOME}/hojjunekim/sam_turn_pure_uni",
+            base_config=DataConfig(prompt_from_task=True),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_droid/params"),
+        num_train_steps=40_000,
+        batch_size=128,
+        lr_schedule=_optimizer.CosineDecaySchedule(
+            warmup_steps=1_000,
+            peak_lr=1e-4,
+            decay_steps=40_000,
+            decay_lr=1e-8,
+        ),
+        pytorch_weight_path=f"{PSI_HOME}/cache/checkpoints/openpi/pi05_droid",
+        policy_metadata={"dataset": "sam_turn_pure_uni"},
+        checkpoint_base_dir=".runs/openpi-05",
+    ),
+    TrainConfig(
+        name="wigs_turn_fast_pi05",
+        project_name="psi",
+        num_workers=8,
+        model=pi0_config.Pi0Config(
+            pi05=True,
+            action_dim=18,
+            action_horizon=16,
+            max_token_len=250,
+        ),
+        data=LeRobotUniversalDataConfig(
+            repo_id=f"{HF_LEROBOT_HOME}/hojjunekim/wigs_turn_fast_uni",
+            base_config=DataConfig(prompt_from_task=True),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_droid/params"),
+        num_train_steps=40_000,
+        batch_size=128,
+        lr_schedule=_optimizer.CosineDecaySchedule(
+            warmup_steps=1_000,
+            peak_lr=1e-4,
+            decay_steps=40_000,
+            decay_lr=1e-8,
+        ),
+        pytorch_weight_path=f"{PSI_HOME}/cache/checkpoints/openpi/pi05_droid",
+        policy_metadata={"dataset": "wigs_turn_fast_uni"},
+        checkpoint_base_dir=".runs/openpi-05",
+    ),
+    TrainConfig(
+        name="sam_locomani_adjust_pi05",
+        project_name="psi",
+        num_workers=8,
+        model=pi0_config.Pi0Config(
+            pi05=True,
+            action_dim=18,
+            action_horizon=16,
+            max_token_len=250,
+        ),
+        data=LeRobotUniversalDataConfig(
+            repo_id=f"{HF_LEROBOT_HOME}/hojjunekim/sam_locomani_adjust_uni",
+            base_config=DataConfig(prompt_from_task=True),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_droid/params"),
+        num_train_steps=40_000,
+        batch_size=128,
+        lr_schedule=_optimizer.CosineDecaySchedule(
+            warmup_steps=1_000,
+            peak_lr=1e-4,
+            decay_steps=40_000,
+            decay_lr=1e-8,
+        ),
+        pytorch_weight_path=f"{PSI_HOME}/cache/checkpoints/openpi/pi05_droid",
+        policy_metadata={"dataset": "sam_locomani_adjust_uni"},
+        checkpoint_base_dir=".runs/openpi-05",
+    ),
+    TrainConfig(
+        name="sam_turn_camfix_pi05",
+        project_name="psi",
+        num_workers=8,
+        model=pi0_config.Pi0Config(
+            pi05=True,
+            action_dim=18,
+            action_horizon=16,
+            max_token_len=250,
+        ),
+        data=LeRobotUniversalDataConfig(
+            repo_id=f"{HF_LEROBOT_HOME}/hojjunekim/sam_turn_camfix_uni",
+            base_config=DataConfig(prompt_from_task=True),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_droid/params"),
+        num_train_steps=40_000,
+        batch_size=128,
+        lr_schedule=_optimizer.CosineDecaySchedule(
+            warmup_steps=1_000,
+            peak_lr=1e-4,
+            decay_steps=40_000,
+            decay_lr=1e-8,
+        ),
+        pytorch_weight_path=f"{PSI_HOME}/cache/checkpoints/openpi/pi05_droid",
+        policy_metadata={"dataset": "sam_turn_camfix_uni"},
+        checkpoint_base_dir=".runs/openpi-05",
     ),
     ### experiments on SIMPLE tasks ####
     TrainConfig(
@@ -1213,7 +1753,7 @@ _CONFIGS = [
             max_token_len=250,
         ),
         data=LeRobotHFMDataConfig(
-            repo_id=f"{os.environ['PSI_HOME']}/data/simple/G1WholebodyBendPick-v1",
+            repo_id=f"{PSI_HOME}/data/simple/G1WholebodyBendPick-v1",
             base_config=DataConfig(prompt_from_task=True),
         ),
         weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_droid/params"),
@@ -1225,7 +1765,7 @@ _CONFIGS = [
             decay_steps=40_000,
             decay_lr=1e-8,
         ),
-        pytorch_weight_path=f"{os.environ['PSI_HOME']}/cache/checkpoints/openpi/pi05_droid",
+        pytorch_weight_path=f"{PSI_HOME}/cache/checkpoints/openpi/pi05_droid",
         policy_metadata={"dataset": "G1WholebodyBendPick-v0-psi0"},
         checkpoint_base_dir=f".runs/openpi-05"
     ),
@@ -1240,7 +1780,7 @@ _CONFIGS = [
             max_token_len=250,
         ),
         data=LeRobotHFMDataConfig(
-            repo_id=f"{os.environ['PSI_HOME']}/data/simple/G1WholebodyXMovePick-v0",
+            repo_id=f"{PSI_HOME}/data/simple/G1WholebodyXMovePick-v0",
             base_config=DataConfig(prompt_from_task=True),
         ),
         weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_droid/params"),
@@ -1252,7 +1792,7 @@ _CONFIGS = [
             decay_steps=40_000,
             decay_lr=1e-8,
         ),
-        pytorch_weight_path=f"{os.environ['PSI_HOME']}/cache/checkpoints/openpi/pi05_droid",
+        pytorch_weight_path=f"{PSI_HOME}/cache/checkpoints/openpi/pi05_droid",
         policy_metadata={"dataset": "G1WholebodyXMovePick-v0"},
         checkpoint_base_dir=f".runs/openpi-05"
     ),
@@ -1267,7 +1807,7 @@ _CONFIGS = [
             max_token_len=250,
         ),
         data=LeRobotHFMDataConfig(
-            repo_id=f"{os.environ['PSI_HOME']}/data/simple/G1WholebodyXMoveBendPickTeleop-v0",
+            repo_id=f"{PSI_HOME}/data/simple/G1WholebodyXMoveBendPickTeleop-v0",
             base_config=DataConfig(prompt_from_task=True),
         ),
         weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_droid/params"),
@@ -1279,7 +1819,7 @@ _CONFIGS = [
             decay_steps=40_000,
             decay_lr=1e-8,
         ),
-        pytorch_weight_path=f"{os.environ['PSI_HOME']}/cache/checkpoints/openpi/pi05_droid",
+        pytorch_weight_path=f"{PSI_HOME}/cache/checkpoints/openpi/pi05_droid",
         policy_metadata={"dataset": "G1WholebodyXMoveBendPickTeleop-v0"},
         checkpoint_base_dir=f".runs/openpi-05"
     ),
@@ -1294,7 +1834,7 @@ _CONFIGS = [
             max_token_len=250,
         ),
         data=LeRobotHFMDataConfig(
-            repo_id=f"{os.environ['PSI_HOME']}/data/simple/G1WholebodyBendPickMP-v0",
+            repo_id=f"{PSI_HOME}/data/simple/G1WholebodyBendPickMP-v0",
             base_config=DataConfig(prompt_from_task=True),
         ),
         weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_droid/params"),
@@ -1306,7 +1846,7 @@ _CONFIGS = [
             decay_steps=40_000,
             decay_lr=1e-8,
         ),
-        pytorch_weight_path=f"{os.environ['PSI_HOME']}/cache/checkpoints/openpi/pi05_droid",
+        pytorch_weight_path=f"{PSI_HOME}/cache/checkpoints/openpi/pi05_droid",
         policy_metadata={"dataset": "G1WholebodyBendPickMP-v0"},
         checkpoint_base_dir=f".runs/openpi-05"
     ),
@@ -1321,7 +1861,7 @@ _CONFIGS = [
             max_token_len=250,
         ),
         data=LeRobotHFMDataConfig(
-            repo_id=f"{os.environ['PSI_HOME']}/data/simple/G1WholebodyHandoverTeleop-v0",
+            repo_id=f"{PSI_HOME}/data/simple/G1WholebodyHandoverTeleop-v0",
             base_config=DataConfig(prompt_from_task=True),
         ),
         weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_droid/params"),
@@ -1333,7 +1873,7 @@ _CONFIGS = [
             decay_steps=40_000,
             decay_lr=1e-8,
         ),
-        pytorch_weight_path=f"{os.environ['PSI_HOME']}/cache/checkpoints/openpi/pi05_droid",
+        pytorch_weight_path=f"{PSI_HOME}/cache/checkpoints/openpi/pi05_droid",
         policy_metadata={"dataset": "G1WholebodyHandoverTeleop-v0"},
         checkpoint_base_dir=f".runs/openpi-05"
     ),
@@ -1348,7 +1888,7 @@ _CONFIGS = [
             max_token_len=250,
         ),
         data=LeRobotHFMDataConfig(
-            repo_id=f"{os.environ['PSI_HOME']}/data/simple/G1WholebodyLocomotionPickBetweenTablesTeleop-v0",
+            repo_id=f"{PSI_HOME}/data/simple/G1WholebodyLocomotionPickBetweenTablesTeleop-v0",
             base_config=DataConfig(prompt_from_task=True),
         ),
         weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_droid/params"),
@@ -1360,7 +1900,7 @@ _CONFIGS = [
             decay_steps=40_000,
             decay_lr=1e-8,
         ),
-        pytorch_weight_path=f"{os.environ['PSI_HOME']}/cache/checkpoints/openpi/pi05_droid",
+        pytorch_weight_path=f"{PSI_HOME}/cache/checkpoints/openpi/pi05_droid",
         policy_metadata={"dataset": "G1WholebodyLocomotionPickBetweenTablesTeleop-v0"},
         checkpoint_base_dir=f".runs/openpi-05"
     ),
@@ -1375,7 +1915,7 @@ _CONFIGS = [
             max_token_len=250,
         ),
         data=LeRobotHFMDataConfig(
-            repo_id=f"{os.environ['PSI_HOME']}/data/simple/G1WholebodyTabletopGraspMP-v0",
+            repo_id=f"{PSI_HOME}/data/simple/G1WholebodyTabletopGraspMP-v0",
             base_config=DataConfig(prompt_from_task=True),
         ),
         weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_droid/params"),
@@ -1387,7 +1927,7 @@ _CONFIGS = [
             decay_steps=40_000,
             decay_lr=1e-8,
         ),
-        pytorch_weight_path=f"{os.environ['PSI_HOME']}/cache/checkpoints/openpi/pi05_droid",
+        pytorch_weight_path=f"{PSI_HOME}/cache/checkpoints/openpi/pi05_droid",
         policy_metadata={"dataset": "G1WholebodyTabletopGraspMP-v0"},
         checkpoint_base_dir=f".runs/openpi-05"
     ),

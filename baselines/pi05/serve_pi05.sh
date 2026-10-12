@@ -1,29 +1,31 @@
 #!/bin/bash
+# Serve a fine-tuned pi0.5 checkpoint over websocket (openpi protocol).
+#
+# Usage: baselines/pi05/serve_pi05.sh <config> <checkpoint_dir> [port]
+#   <config>          training config name, e.g. wigs_turn_pure_pi05
+#   <checkpoint_dir>  e.g. .runs/openpi-05/<config>/<exp>/40000
+#   [port]            default 9000 (or set PORT)
+# Env overrides: CUDA_VISIBLE_DEVICES (0), VENV (.venv-openpi).
+# Run from the Psi0 repo root.
 
-if [ "$#" -lt 1 ]; then
-    echo "Usage: $0 <task> [ckpt_step] [port]"
-    echo "  <task>       : Task name (required)"
-    echo "  [ckpt_step]  : Checkpoint step (default: 40000)"
-    echo "  [port]       : Port to serve on (default: 9000)"
+if [ "$#" -lt 2 ]; then
+    sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'
     exit 1
 fi
 
-source .venv-openpi/bin/activate
+CONFIG=$1
+CKPT_DIR=$2
+PORT=${3:-${PORT:-9000}}
+VENV=${VENV:-.venv-openpi}
 
-export task=$1
-export ckpt_step=${2:-40000}
-export port=${3:-9000}
-
-
-export UV_ENV_FILE=.venv-openpi 
-
-
+source "$VENV/bin/activate"
+export UV_ENV_FILE=$VENV
 export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
 
-echo "Serving Openpi05 on GPU $CUDA_VISIBLE_DEVICES"
+echo "Serving pi0.5 $CONFIG from $CKPT_DIR on GPU $CUDA_VISIBLE_DEVICES, port $PORT"
 
 python src/openpi/deploy/serve_policy.py \
-    --port=$port \
+    --port="$PORT" \
     policy:checkpoint \
-    --policy.config=$task \
-    --policy.dir=.runs/openpi-05/$task/$task/$ckpt_step
+    --policy.config="$CONFIG" \
+    --policy.dir="$CKPT_DIR"

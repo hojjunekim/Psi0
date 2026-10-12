@@ -100,18 +100,24 @@ class Server:
             transforms = [self.model_transform.resize(), self.model_transform.center_crop()]
             t = v2.Compose(transforms)
 
-            states = torch.from_numpy(state_dict["states"].copy())
+            # (To, Ds) proprio state; Ds is the run's state dim (18 for the LEGS
+            # EEF models, see observation.state_psi0_18).
+            states = torch.from_numpy(np.asarray(state_dict["states"], dtype=np.float32).copy())
+            if states.ndim == 1:
+                states = states.unsqueeze(0)
             # self.repack_transform.to_psi0_state_format(
             #     torch.from_numpy(state_dict["proprio_joint_positions"].copy()),
             #     torch.from_numpy(state_dict["amo_policy_command"].copy()),
             # )
 
             if self.maxmin.normalize_state: # type:ignore
+                s_np = states.numpy()
+                if self.maxmin.pad_state_dim is not None:
+                    s_np = pad_to_len(s_np, self.maxmin.pad_state_dim, dim=1)[0]
                 states = torch.from_numpy(
-                    self.maxmin.normalize_state_func(
-                        pad_to_len(states.numpy(), self.maxmin.pad_state_dim, dim=1)[0]
-                    )
-                ).to(self.device)
+                    self.maxmin.normalize_state_func(s_np)
+                )
+            states = states.to(self.device)
 
             if not self.enable_rtc:
                 raw_pred_actions = self.model.predict_action(
@@ -200,12 +206,12 @@ def main():
     overwatch.info("Start Serving from uv")
     overwatch.info(f"Args: {sys.argv}")
     from dotenv import load_dotenv
-    assert load_dotenv() 
+    load_dotenv()  # optional .env (see .env.sample)
     config = tyro.cli(ServerConfig, config=(tyro.conf.ConsolidateSubcommandArgs,), args=sys.argv[1:])
     serve(config)
 
 if __name__ == "__main__":
     from dotenv import load_dotenv
-    assert load_dotenv()
+    load_dotenv()
     config = tyro.cli(ServerConfig, config=(tyro.conf.ConsolidateSubcommandArgs,))
     serve(config)

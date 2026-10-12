@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import socket
 import subprocess
+import tempfile
 import time
 from typing import Any
 
@@ -138,6 +139,8 @@ def main() -> int:
         eval_cfg["num_episodes"] = args.num_episodes
     if args.num_workers is not None:
         eval_cfg["num_workers"] = args.num_workers
+    if not server_cfg.get("model_path") or not eval_cfg.get("data_dir"):
+        parser.error("set the checkpoint and dataset with --model-path and --data-dir (or in the preset)")
 
     gr00t_python = Path(server_cfg.pop("python", DEFAULT_GR00T_PYTHON)).resolve()
     server_host = server_cfg.pop("host", "0.0.0.0")
@@ -150,9 +153,6 @@ def main() -> int:
     env["PYTHONPATH"] = f"{REPO_ROOT / 'src'}:{REPO_ROOT / 'src/gr00t'}:{env.get('PYTHONPATH', '')}".rstrip(":")
     env.setdefault("TORCHINDUCTOR_DISABLE", "1")
     env.setdefault("TORCH_COMPILE", "0")
-    env.setdefault("HF_HOME", "/tmp/hf")
-    env.setdefault("TRANSFORMERS_CACHE", f"{env['HF_HOME']}/transformers")
-    env.setdefault("XDG_CACHE_HOME", env["HF_HOME"])
     for key, value in env_cfg.items():
         env[str(key)] = str(value)
 
@@ -180,7 +180,7 @@ def main() -> int:
     if args.dry_run:
         return 0
 
-    log_path = Path(runtime_cfg.get("server_log", f"/tmp/gr00t_serve_{port}.log"))
+    log_path = Path(runtime_cfg.get("server_log", Path(tempfile.gettempdir()) / f"gr00t_serve_{port}.log"))
     log_path.parent.mkdir(parents=True, exist_ok=True)
     with log_path.open("w") as log_file:
         server = subprocess.Popen(

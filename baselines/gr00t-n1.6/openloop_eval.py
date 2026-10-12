@@ -38,9 +38,10 @@ def _to_state_array(value: Any) -> np.ndarray:
 
 @dataclasses.dataclass
 class Args:
+    dataset_path: str
+    """LeRobot dataset root to replay."""
     host: str = "127.0.0.1"
     port: int = 5555
-    dataset_path: str = "/hfm/data/real_teleop_g1/lerobot/Hold_lunch_bag_with_both_hands_and_squat_to_put_on_the_coffee_table"
     modality_config_path: str = "gr00t/configs/modality/g1_locomanip.py"
     modality_config_var: str | None = None
     episode_index: int = 0

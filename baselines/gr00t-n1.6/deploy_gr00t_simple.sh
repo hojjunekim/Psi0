@@ -1,31 +1,39 @@
 #!/usr/bin/env bash
+# Serve a fine-tuned GR00T N1.6 checkpoint over HTTP (POST /act, GET /health).
+#
+# Usage: baselines/gr00t-n1.6/deploy_gr00t_simple.sh <checkpoint_dir> [port]
+#   <checkpoint_dir>  e.g. .runs/gr00t/<run>/checkpoint-40000 (or set MODEL_PATH)
+#   [port]            default 5556 (or set PORT)
+# Env overrides: EMBODIMENT_TAG (G1_EEF_UNI, the LEGS 18-D EEF schema),
+# ACTION_EXEC_HORIZON (16), DEVICE (cuda:0), HOST (0.0.0.0).
+# Run from the Psi0 repo root; an optional .env there is sourced.
 set -euo pipefail
 
-export PYTHONPATH="/hfm/zhenyu/psi/src:/hfm/zhenyu/psi/src/gr00t${PYTHONPATH:+:$PYTHONPATH}"
+MODEL_PATH="${1:-${MODEL_PATH:-}}"
+PORT="${2:-${PORT:-5556}}"
+if [[ -z "$MODEL_PATH" ]]; then
+  sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'
+  exit 1
+fi
+EMBODIMENT_TAG="${EMBODIMENT_TAG:-G1_EEF_UNI}"
+ACTION_EXEC_HORIZON="${ACTION_EXEC_HORIZON:-16}"
+DEVICE="${DEVICE:-cuda:0}"
+HOST="${HOST:-0.0.0.0}"
+
+export PYTHONPATH="$PWD/src:$PWD/src/gr00t${PYTHONPATH:+:$PYTHONPATH}"
 source ./src/gr00t/.venv/bin/activate
-source ~/.env
+if [[ -f .env ]]; then
+  set -a; source .env; set +a
+fi
 export TORCHINDUCTOR_DISABLE=1
 export TORCH_COMPILE=0
-export HF_HOME="${HF_HOME:-/tmp/hf}"
-export TRANSFORMERS_CACHE="${TRANSFORMERS_CACHE:-$HF_HOME/transformers}"
-export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$HF_HOME}"
-MODEL_PATH="${MODEL_PATH:-/hfm/zhenyu/psi/checkpoints/pretrained_g1_ee_downstream/checkpoint-50000/}"
-PORT="${PORT:-5556}"
-
-# PROCESSOR_DIR="/hfm/zhenyu/psi/checkpoints/G1WholebodyBendPick-v0-psi0-real/processor"
-# if [[ -d "$PROCESSOR_DIR" ]]; then
-#   for f in processor_config.json statistics.json embodiment_id.json; do
-#     if [[ -f "$PROCESSOR_DIR/$f" ]] && [[ ! -f "$MODEL_PATH/$f" ]]; then
-#       cp "$PROCESSOR_DIR/$f" "$MODEL_PATH/$f"
-#     fi
-#   done
-# fi
 
 python -m gr00t.deploy.gr00t_serve_simple \
-  --embodiment-tag G1_LOCO_DOWNSTREAM \
+  --embodiment-tag "$EMBODIMENT_TAG" \
   --model-path "$MODEL_PATH" \
-  --device cuda:0 \
-  --host 0.0.0.0 \
+  --device "$DEVICE" \
+  --host "$HOST" \
   --port "$PORT" \
+  --action-exec-horizon "$ACTION_EXEC_HORIZON" \
   --use-sim-policy-wrapper \
   --strict

@@ -243,10 +243,10 @@ class FinetuneTrainer(Trainer):
         }
 
         val_dataloader_kwargs = {
-            "num_workers": 12,
+            "num_workers": 4,
             "drop_last": False,
             # "pin_memory": True,
-            "persistent_workers": True,
+            "persistent_workers": False,  # let val workers die between evals; avoids shm/semaphore race when two jobs share a node
             "shuffle": True,
         }  # 1 small enough to fit im Mem. 2. no need distributed sampler
 
@@ -376,8 +376,8 @@ class FinetuneTrainer(Trainer):
         self.train_loss_tracker = step_loss = losses["loss"].detach().item()
 
         return (self.accelerator.sync_gradients, {
-            "lr_act": self.lr, 
-            "grad_norm_act": self._grad_norm_act, # type: ignore
+            "lr_act": self.lr,
+            "grad_norm_act": getattr(self, '_grad_norm_act', 0.0),
             "loss": step_loss
         })
 

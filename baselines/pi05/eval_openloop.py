@@ -1,5 +1,5 @@
 from dotenv import load_dotenv
-assert load_dotenv(), "Failed to load .env file. Make sure it exists and is properly formatted."
+load_dotenv()
 
 import dataclasses
 import enum
@@ -23,7 +23,7 @@ class EnvMode(enum.Enum):
     ALOHA_SIM = "aloha_sim"
     DROID = "droid"
     LIBERO = "libero"
-    HFM = "hfm"
+    SIMPLE = "simple"
 
 @dataclasses.dataclass
 class Checkpoint:
@@ -49,7 +49,7 @@ class Args:
     # Path to save the timings to a parquet file. (e.g., timing.parquet)
     timing_file: pathlib.Path | None = None
     # Environment to run the policy in.
-    env: EnvMode = EnvMode.HFM
+    env: EnvMode = EnvMode.SIMPLE
     task: str = "Pick_toys_into_box_and_lift_and_turn_and_put_on_the_chair_new_target_yaw"
 
     # policy: Checkpoint = dataclasses.field(default_factory=Checkpoint)
@@ -200,7 +200,7 @@ def main(args: Args) -> None:
     # print("==== Final L1 Loss ====")
     l1_losses = np.array(l1_losses)
     # print(f"L1 Loss shape: {l1_losses.shape}")
-    np.save("hfm_pick_n_squat_l1_loss.npy", l1_losses)
+    np.save("pi05_openloop_l1_loss.npy", l1_losses)
     # print(f"Mean L1 Loss: {np.mean(l1_losses)}")
     # print(f"Std L1 Loss: {np.std(l1_losses)}"
     plot_error(l1_losses)
@@ -212,7 +212,7 @@ def plot_error(l1_losses=None):
     _plot_dir = pathlib.Path(__file__).parent
 
     if l1_losses is None:
-        l1_losses = np.load("hfm_pick_n_squat_l1_loss copy.npy")
+        l1_losses = np.load("pi05_openloop_l1_loss.npy")
     print(f"L1 Loss shape: {l1_losses.shape}")
     print(f"Mean L1 Loss: {np.mean(l1_losses)}")
 
