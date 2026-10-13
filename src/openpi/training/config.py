@@ -1688,7 +1688,7 @@ _CONFIGS = [
         checkpoint_base_dir=".runs/openpi-05",
     ),
     TrainConfig(
-        name="sam_locomani_adjust_pi05",
+        name="sam_locomani_camfix_pi05",
         project_name="psi",
         num_workers=8,
         model=pi0_config.Pi0Config(
@@ -1698,7 +1698,7 @@ _CONFIGS = [
             max_token_len=250,
         ),
         data=LeRobotUniversalDataConfig(
-            repo_id=f"{HF_LEROBOT_HOME}/hojjunekim/sam_locomani_adjust_uni",
+            repo_id=f"{HF_LEROBOT_HOME}/hojjunekim/sam_locomani_camfix_uni",
             base_config=DataConfig(prompt_from_task=True),
         ),
         weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_droid/params"),
@@ -1711,7 +1711,7 @@ _CONFIGS = [
             decay_lr=1e-8,
         ),
         pytorch_weight_path=f"{PSI_HOME}/cache/checkpoints/openpi/pi05_droid",
-        policy_metadata={"dataset": "sam_locomani_adjust_uni"},
+        policy_metadata={"dataset": "sam_locomani_camfix_uni"},
         checkpoint_base_dir=".runs/openpi-05",
     ),
     TrainConfig(
