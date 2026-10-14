@@ -2,7 +2,7 @@
 # Serve a fine-tuned pi0.5 checkpoint over websocket (openpi protocol).
 #
 # Usage: baselines/pi05/serve_pi05.sh <config> <checkpoint_dir> [port]
-#   <config>          training config name, e.g. wigs_turn_pure_pi05
+#   <config>          training config name, e.g. legs_turn_uni_pi05
 #   <checkpoint_dir>  e.g. .runs/openpi-05/<config>/<exp>/40000
 #   [port]            default 9000 (or set PORT)
 # Env overrides: CUDA_VISIBLE_DEVICES (0), VENV (.venv-openpi).
