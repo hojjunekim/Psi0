@@ -20,6 +20,9 @@ CKPT_DIR=$2
 PORT=${3:-${PORT:-9000}}
 VENV=${VENV:-.venv-openpi}
 
+# LEGS's legs conda env exports PYTHONPATH for ROS 2 and leaves it set after conda deactivate; this venv would
+# then import that env's torch instead of its own.
+unset PYTHONPATH
 source "$VENV/bin/activate"
 export UV_ENV_FILE=$VENV
 export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}

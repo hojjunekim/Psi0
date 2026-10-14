@@ -20,7 +20,9 @@ ACTION_EXEC_HORIZON="${ACTION_EXEC_HORIZON:-16}"
 DEVICE="${DEVICE:-cuda:0}"
 HOST="${HOST:-0.0.0.0}"
 
-export PYTHONPATH="$PWD/src:$PWD/src/gr00t${PYTHONPATH:+:$PYTHONPATH}"
+# Not appended to the inherited PYTHONPATH: LEGS's legs conda env exports one for ROS 2 and leaves it set after
+# conda deactivate, and this venv would then import that env's torch instead of its own.
+export PYTHONPATH="$PWD/src:$PWD/src/gr00t"
 source ./src/gr00t/.venv/bin/activate
 if [[ -f .env ]]; then
   set -a; source .env; set +a
