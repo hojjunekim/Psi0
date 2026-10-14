@@ -3,7 +3,7 @@
 #
 # Usage: scripts/deploy/serve_psi0_simple.sh RUN_DIR CKPT_STEP
 #   RUN_DIR    training run dir (holds run_config.json, argv.txt, checkpoints/ckpt_<step>)
-#   CKPT_STEP  checkpoint step, e.g. 40000
+#   CKPT_STEP  checkpoint step, e.g. 20000
 # Env overrides: PORT (22085), HOST (0.0.0.0), ACTION_EXEC_HORIZON (30, the
 # LEGS chunk), RTC (1 = training-time RTC on), CUDA_VISIBLE_DEVICES (0).
 # Run from the Psi0 repo root.

@@ -1,13 +1,15 @@
 #!/bin/bash
 
 # Fine-tune Psi0 with 18-dim EEF actions for Sonic C++ deploy (IK mode).
-# Usage: ./finetune-real-psi0-18act-eef.sh [task] [exp]
+# Usage: ./finetune-real-psi0-18act-eef.sh <task> [exp] [extra args...]
 #
 # Action (18): L_eef_6d(6) + L_grip(1) + R_eef_6d(6) + R_grip(1) + vx + vy + vyaw + height
 # State  (15): L_eef_6d(6) + L_grip(1) + R_eef_6d(6) + R_grip(1) + height
 #
 # Deploy path: VLA → EEF poses → Sonic C++ (IK internally) → motor commands
-# Dataset: first argument (default hojjunekim/g1_sonic_orange_to_plate_turn_psi0)
+# Dataset: first argument (required), a LeRobot repo id under $DATA_ROOT. LEGS runs this
+# from its scripts/train/psi0.sh with a paper dataset (e.g. hojjunekim/legs_turn_uni) and
+# the flags that select that dataset's 18-D state and action columns.
 
 export OMP_NUM_THREADS=32
 # Default to every GPU on the node.
@@ -19,9 +21,12 @@ NPROC_PER_NODE=$(echo $CUDA_VISIBLE_DEVICES | tr ',' '\n' | wc -l)
 ulimit -n 65535
 echo "Training with $NPROC_PER_NODE GPUs"
 
-# Default dataset and experiment name
-DEFAULT_REPO="hojjunekim/g1_sonic_orange_to_plate_turn_psi0"
-export task="${1:-$DEFAULT_REPO}"
+# Dataset (required) and experiment name
+if [ -z "${1:-}" ]; then
+    echo "usage: $0 <task> [exp] [extra args...]" >&2
+    exit 2
+fi
+export task="$1"
 export exp="${2:-psi0-18act-eef}"
 shift 2 2>/dev/null || true
 EXTRA_ARGS="$@"

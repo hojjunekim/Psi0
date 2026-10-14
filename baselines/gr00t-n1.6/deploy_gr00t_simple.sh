@@ -2,7 +2,7 @@
 # Serve a fine-tuned GR00T N1.6 checkpoint over HTTP (POST /act, GET /health).
 #
 # Usage: baselines/gr00t-n1.6/deploy_gr00t_simple.sh <checkpoint_dir> [port]
-#   <checkpoint_dir>  e.g. .runs/gr00t/<run>/checkpoint-40000 (or set MODEL_PATH)
+#   <checkpoint_dir>  e.g. .runs/gr00t-n16/<run>/checkpoint-20000 (or set MODEL_PATH)
 #   [port]            default 5556 (or set PORT)
 # Env overrides: EMBODIMENT_TAG (G1_EEF_UNI, the LEGS 18-D EEF schema),
 # ACTION_EXEC_HORIZON (16), DEVICE (cuda:0), HOST (0.0.0.0).
